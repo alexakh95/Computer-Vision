@@ -1,3 +1,4 @@
+from sklearn.metrics import accuracy_score
 import first_question as fq
 from sklearn.model_selection import train_test_split
 import cv2
@@ -82,7 +83,7 @@ def random_forest_classifier(X_train, y_train, X_val, y_val):
     Returns:
         clf (RandomForestClassifier): Trained random forest classifier.
     """
-    clf = RandomForestClassifier(n_estimators=100, random_state=42)
+    clf = RandomForestClassifier(n_estimators=150, random_state=42)
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_val)
     accuracy = accuracy_score(y_val, y_pred)
@@ -111,13 +112,22 @@ print(f"Test set: {len(test_paths)} images")
 #load the images from the directory
 train_images = dataset.load_images(train_paths)
 
-#get the keypoints and descriptors for each image
-kp, des = sift_detect_describe(train_images)
-all_descriptors=build_descriptor_array(des)
-vocabulary = vec_quantization(all_descriptors)
+#get the keypoints and descriptors for each image in train set
+_ , train_des = sift_detect_describe(train_images)
+all_train_descriptors=build_descriptor_array(train_des)
+vocabulary = vec_quantization(all_train_descriptors)
+
+#get the descriptors for each image in the validation set
+val_images = dataset.load_images(val_paths)
+_ , val_des = sift_detect_describe(val_images)
+
 
 #create histograms for each image and label in the training set
-histograms = build_histograms(des, vocabulary)
+train_histograms = build_histograms(train_des, vocabulary)
+valid_histograms = build_histograms(val_des, vocabulary)
+
+#train the random forest classifier
+random_forest_classifier(train_histograms, train_labels, valid_histograms, val_labels)
 
 print("Vocabulary created")
 

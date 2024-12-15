@@ -1,5 +1,5 @@
 from sklearn.metrics import  precision_recall_curve, average_precision_score
-import first_question_helper as fq
+import utilities as fq
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import label_binarize
 import matplotlib.pyplot as plt
@@ -7,14 +7,14 @@ import matplotlib.pyplot as plt
 dataset = fq.ImageDataset()
 dataset.parse_labels_from_file_name()
 
-# Split into train+val and test
-train_val_paths, test_paths, train_val_labels, test_labels = train_test_split(
-    dataset.image_paths, dataset.labels, test_size=0.2, stratify=dataset.labels, random_state=42
+# Split into train (60%) and remaining (40%)
+train_paths, remaining_paths, train_labels, remaining_labels = train_test_split(
+    dataset.image_paths, dataset.labels, test_size=0.4, stratify=dataset.labels, random_state=42
 )
 
-# Split train+val into train and validation
-train_paths, val_paths, train_labels, val_labels = train_test_split(
-    train_val_paths, train_val_labels, test_size=0.25, stratify=train_val_labels, random_state=42
+# Split remaining into validation (50% of remaining, which is 20% of total) and test (50% of remaining, which is 20% of total)
+val_paths, test_paths, val_labels, test_labels = train_test_split(
+    remaining_paths, remaining_labels, test_size=0.5, stratify=remaining_labels, random_state=42
 )
 
 #load the images from the directory

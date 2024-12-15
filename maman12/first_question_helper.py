@@ -1,10 +1,67 @@
+import numpy as np 
+import os
+import cv2
+from pathlib import Path
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
-import first_question as fq
-from sklearn.model_selection import train_test_split
 import cv2
 from sklearn.cluster import KMeans
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
+
+class ImageDataset:
+    def __init__(self):
+        self.labels = None
+        self.unique_labels = None
+        self.image_paths = None
+    
+    def parse_labels_from_file_name(self,folder_name: str = 'image_dataset'):
+    
+        """
+        Parses image file names in the specified folder to extract labels and image paths.
+        This method assumes that the label is the part of the file name before the first underscore.
+        It supports image files with extensions '.jpg', '.png', and '.jpeg'.
+        Args:
+            folder_name (str): The name of the folder containing the images. Defaults to 'image_dataset'.
+        Attributes:
+            labels (list): A list of labels extracted from the image file names.
+            image_paths (list): A list of full paths to the image files.
+    
+        """
+        
+        main_folder = Path(__file__).resolve().parents[0]  # Get the parent folder of 'code'
+        path = main_folder / folder_name       
+        
+        # List all image paths and extract labels
+        image_paths = []
+        labels = []
+
+        for image_name in os.listdir(path):
+            if image_name.endswith(('.jpg', '.png', '.jpeg')):  # Adjust for your file types
+                label = image_name.split('_')[0]  # Assumes label is before the first underscore
+                image_paths.append(os.path.join(path, image_name))
+                labels.append(label)
+
+        self.labels = labels
+        self.image_paths = image_paths
+        self.unique_labels = np.unique(self.labels)
+        print(f"Loaded {len(image_paths)} images with labels.")
+        print(f"Found {len(self.unique_labels)} unique labels.{self.unique_labels}")
+        
+    def load_images(self, list_dir):
+        """
+        Load images from a list of directories.
+        Args:
+            list_dir (list): A list of directories containing images.
+        Returns:
+            images (np.ndarray): A numpy array of images.
+        """
+        images = []
+        for dir in list_dir:
+            image = cv2.imread(dir)
+            images.append(image)
+            
+        return np.array(images)
 
 def sift_detect_describe(images):
     """
@@ -49,7 +106,7 @@ def vec_quantization(descriptors):
     Returns:
         codebook (np.ndarray): A numpy array of centroids.
     """
-    kmeans = KMeans(n_clusters=100,n_init=2, random_state=42)
+    kmeans = KMeans(n_clusters=100,n_init=1, random_state=42)
     kmeans.fit(descriptors)
     
     return kmeans.cluster_centers_
@@ -86,52 +143,11 @@ def random_forest_classifier(X_train, y_train, X_val, y_val):
     clf = RandomForestClassifier(n_estimators=150, random_state=42)
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_val)
+    y_proba = clf.predict_proba(X_val)
     accuracy = accuracy_score(y_val, y_pred)
     print(f"Validation accuracy: {accuracy:.2f}")
-    return clf
+    return clf, y_pred, y_proba
 
 
-dataset = fq.ImageDataset()
-dataset.parse_labels_from_file_name()
-
-
-# Split into train+val and test
-train_val_paths, test_paths, train_val_labels, test_labels = train_test_split(
-    dataset.image_paths, dataset.labels, test_size=0.2, stratify=dataset.labels, random_state=42
-)
-
-# Split train+val into train and validation
-train_paths, val_paths, train_labels, val_labels = train_test_split(
-    train_val_paths, train_val_labels, test_size=0.25, stratify=train_val_labels, random_state=42
-)
-
-print(f"Train set: {len(train_paths)} images")
-print(f"Validation set: {len(val_paths)} images")
-print(f"Test set: {len(test_paths)} images")
-
-#load the images from the directory
-train_images = dataset.load_images(train_paths)
-
-#get the keypoints and descriptors for each image in train set
-_ , train_des = sift_detect_describe(train_images)
-all_train_descriptors=build_descriptor_array(train_des)
-vocabulary = vec_quantization(all_train_descriptors)
-
-#get the descriptors for each image in the validation set
-val_images = dataset.load_images(val_paths)
-_ , val_des = sift_detect_describe(val_images)
-
-
-#create histograms for each image and label in the training set
-train_histograms = build_histograms(train_des, vocabulary)
-valid_histograms = build_histograms(val_des, vocabulary)
-
-#train the random forest classifier
-random_forest_classifier(train_histograms, train_labels, valid_histograms, val_labels)
-
-print("Vocabulary created")
-
-
-
-
-
+    
+    

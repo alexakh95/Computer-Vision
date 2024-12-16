@@ -3,11 +3,14 @@ import os
 import cv2
 from pathlib import Path
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
-import cv2
+from sklearn.metrics import accuracy_score,precision_recall_curve,average_precision_score,roc_curve,auc
 from sklearn.cluster import KMeans
-import numpy as np
 from sklearn.ensemble import RandomForestClassifier
+import torch
+from  torchvision import transforms 
+import torchvision.models as  models 
+from PIL import Image
+import matplotlib.pyplot as plt
 
 class ImageDataset:
     def __init__(self):
@@ -62,6 +65,27 @@ class ImageDataset:
             images.append(image)
             
         return np.array(images)
+    
+    def load_image_as_tensor(self,image_path):
+        images = []
+        for path in image_path:
+            # Define a transform to convert the image to a tensor
+            transform = transforms.Compose([
+                transforms.ToTensor(),# Convert the image to a tensor
+                transforms.Normalize( # Normalize to ImageNet mean and std
+                    mean=[0.485, 0.456, 0.406],
+                    std=[0.229, 0.224, 0.225]
+                )
+            ])
+            
+            # Open the image file
+            image = Image.open(path).convert("RGB")
+            # Apply the transform to the image
+            image_tensor = transform(image)
+            
+            images.append(image_tensor)
+    
+        return torch.stack(images)
 
 def sift_detect_describe(images):
     """
@@ -149,5 +173,66 @@ def random_forest_classifier(X_train, y_train, X_val, y_val):
     return clf, y_pred, y_proba
 
 
+
+def cnn_features(images):
+    """
+    Extracts feature maps from the last convolutional layer of a pre-trained VGG-16 model.
+    Args:
+        images (torch.Tensor): A batch of images to extract features from. The tensor should be of shape 
+                               (batch_size, channels, height, width) and normalized appropriately.
+    Returns:
+        torch.Tensor: The feature maps extracted from the last convolutional layer of the VGG-16 model.
+                      The shape of the returned tensor will depend on the input image dimensions.
+    """
+    
+    # Load a pre-trained vgg-16 model
+    model = models.vgg16(pretrained=True)
+    # Remove the classifier (fully connected layers) to get the feature map from the last conv layer
+    feature_extractor = torch.nn.Sequential(*list(model.children())[:-2])
+    # Set the feature extractor to evaluation mode
+    feature_extractor.eval()
+    
+    with torch.no_grad():  # Disable gradient calculation for inference
+        feat_map = feature_extractor(images)
+    
+    return feat_map
     
     
+def plot_confusion_matrix(test_labels, test_predict, unique_labels):
+
+    from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+    plt.figure(figsize=(10, 10))
+    conf_matrix = confusion_matrix(test_labels, test_predict, labels=unique_labels)
+    disp = ConfusionMatrixDisplay(conf_matrix, display_labels=unique_labels)
+    disp.plot(cmap=plt.cm.Blues)
+    plt.title('Confusion Matrix')
+    plt.show(block=True)
+    
+    
+def plot_precision_recall_curve(y_test_binarized, y_score,unique_labels):
+    plt.figure(figsize=(10, 7))
+
+    for i in range(len(unique_labels)):
+        precision, recall, _ = precision_recall_curve(y_test_binarized[:, i], y_score[:, i])
+        avg_precision = average_precision_score(y_test_binarized[:, i], y_score[:, i])
+        plt.plot(recall, precision, label=f"{unique_labels[i]} (AP={avg_precision:.2f})")
+
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.title("Precision-Recall Curve for Each Class")
+    plt.legend(loc="best")
+    plt.grid()
+    plt.show(block=True)
+    
+def plot_roc_curve( y_test_binarized, y_score, unique_labels):
+    for i in range(len(unique_labels)):
+        fpr, tpr, _ = roc_curve(y_test_binarized[:, i], y_score[:, i])
+        roc_auc = auc(fpr, tpr)
+        plt.plot(fpr, tpr, label=f"{unique_labels[i]} (AUC={roc_auc:.2f})")
+    
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title("ROC Curve for Each Class")
+    plt.legend(loc="best")
+    plt.grid()
+    plt.show(block=True)

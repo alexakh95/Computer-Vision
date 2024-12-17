@@ -132,7 +132,7 @@ def vec_quantization(descriptors):
     
     return kmeans.cluster_centers_
 
-def build_histograms(descriptors, codebook):
+def build_histograms(descriptors, codebook,flatten_features:bool=False):
     """
     Build histograms of visual words.
     Args:
@@ -142,12 +142,19 @@ def build_histograms(descriptors, codebook):
         histograms (list): A list of histograms.
     """
     histograms = []
-    for des in descriptors:
-        histogram = np.zeros(len(codebook))
-        for d in des:
-            idx = np.argmin(np.linalg.norm(codebook - d, axis=1))
-            histogram[idx] += 1
-        histograms.append(histogram)
+    if not flatten_features:
+        for des in descriptors:
+            histogram = np.zeros(len(codebook))
+            for d in des:
+                idx = np.argmin(np.linalg.norm(codebook - d, axis=1))
+                histogram[idx] += 1
+            histograms.append(histogram)
+    else:
+        for feat in descriptors:
+            histogram = np.zeros(len(codebook))
+            idx = np.argmin(np.linalg.norm(codebook - feat,axis=1))
+            histogram[idx]+=1
+            histograms.append(histogram)
     return histograms
 
 def random_forest_classifier(X_train, y_train, X_val, y_val):
@@ -171,7 +178,7 @@ def random_forest_classifier(X_train, y_train, X_val, y_val):
 
 
 
-def cnn_features(images,batch_size:int =32):
+def cnn_features(images):
     """
     Extracts feature maps from the last convolutional layer of a pre-trained VGG-16 model.
     Args:
@@ -183,27 +190,39 @@ def cnn_features(images,batch_size:int =32):
     """
     # Check if a GPU is available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Running on: {device}")
 
     # Load a pre-trained vgg-16 model
     model = models.vgg16(pretrained=True)
     # Remove the classifier (fully connected layers) to get the feature map from the last conv layer
     feature_extractor = torch.nn.Sequential(*list(model.children())[:-2])
     feature_extractor = feature_extractor.to(device)
+    
     # Set the feature extractor to evaluation mode
     feature_extractor.eval()
+    
     all_features=[]
-    dataloader = DataLoader(images, batch_size=batch_size, shuffle=False)
+    dataloader = DataLoader(images, batch_size=1, shuffle=False)
     with torch.no_grad():  # Disable gradient calculation for inference
         for batch in dataloader:
             batch = batch[0].to(device)  # Extract the batch of images and move to GPU
-            feat_map = feature_extractor(batch)  # Extract features
+            feat_map = feature_extractor(batch).unsqueeze(0)  # Extract features
             all_features.append(feat_map.cpu())
             
     return torch.cat(all_features, dim=0)
     
     
 def plot_confusion_matrix(test_labels, test_predict, unique_labels):
+    """
+    Plots a confusion matrix using the given test labels, predicted labels, and unique labels.
+
+    Parameters:
+    test_labels (array-like): True labels of the test data.
+    test_predict (array-like): Predicted labels of the test data.
+    unique_labels (array-like): List of unique labels in the dataset.
+
+    Returns:
+    None
+    """
 
     from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
     plt.figure(figsize=(10, 10))
@@ -215,6 +234,18 @@ def plot_confusion_matrix(test_labels, test_predict, unique_labels):
     
     
 def plot_precision_recall_curve(y_test_binarized, y_score,unique_labels):
+    
+    """
+    Plots the Precision-Recall curve for each class.
+
+    Parameters:
+        y_test_binarized (ndarray): Binarized true labels of shape (n_samples, n_classes).
+        y_score (ndarray): Predicted scores of shape (n_samples, n_classes).
+        unique_labels (list): List of unique class labels.
+
+    Returns:
+        None
+    """
     plt.figure(figsize=(10, 7))
 
     for i in range(len(unique_labels)):
@@ -230,6 +261,16 @@ def plot_precision_recall_curve(y_test_binarized, y_score,unique_labels):
     plt.show(block=True)
     
 def plot_roc_curve( y_test_binarized, y_score, unique_labels):
+    
+    """
+        Plots the ROC curve for each class in a multi-class classification problem.
+        Parameters:
+        y_test_binarized (numpy.ndarray): Binarized true labels of shape (n_samples, n_classes).
+        y_score (numpy.ndarray): Predicted scores of shape (n_samples, n_classes).
+        unique_labels (list): List of unique class labels.
+        Returns:
+        None
+    """
     for i in range(len(unique_labels)):
         fpr, tpr, _ = roc_curve(y_test_binarized[:, i], y_score[:, i])
         roc_auc = auc(fpr, tpr)
@@ -241,3 +282,4 @@ def plot_roc_curve( y_test_binarized, y_score, unique_labels):
     plt.legend(loc="best")
     plt.grid()
     plt.show(block=True)
+ 

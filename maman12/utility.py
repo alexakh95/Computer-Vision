@@ -11,7 +11,7 @@ from  torchvision import transforms
 import torchvision.models as  models 
 from PIL import Image
 import matplotlib.pyplot as plt
-
+from torch.utils.data import DataLoader
 class ImageDataset:
     def __init__(self):
         self.labels = None
@@ -77,14 +77,11 @@ class ImageDataset:
                     std=[0.229, 0.224, 0.225]
                 )
             ])
-            
             # Open the image file
             image = Image.open(path).convert("RGB")
             # Apply the transform to the image
             image_tensor = transform(image)
-            
             images.append(image_tensor)
-    
         return torch.stack(images)
 
 def sift_detect_describe(images):
@@ -174,7 +171,7 @@ def random_forest_classifier(X_train, y_train, X_val, y_val):
 
 
 
-def cnn_features(images):
+def cnn_features(images,batch_size:int =32):
     """
     Extracts feature maps from the last convolutional layer of a pre-trained VGG-16 model.
     Args:
@@ -184,18 +181,26 @@ def cnn_features(images):
         torch.Tensor: The feature maps extracted from the last convolutional layer of the VGG-16 model.
                       The shape of the returned tensor will depend on the input image dimensions.
     """
-    
+    # Check if a GPU is available
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Running on: {device}")
+
     # Load a pre-trained vgg-16 model
     model = models.vgg16(pretrained=True)
     # Remove the classifier (fully connected layers) to get the feature map from the last conv layer
     feature_extractor = torch.nn.Sequential(*list(model.children())[:-2])
+    feature_extractor = feature_extractor.to(device)
     # Set the feature extractor to evaluation mode
     feature_extractor.eval()
-    
+    all_features=[]
+    dataloader = DataLoader(images, batch_size=batch_size, shuffle=False)
     with torch.no_grad():  # Disable gradient calculation for inference
-        feat_map = feature_extractor(images)
-    
-    return feat_map
+        for batch in dataloader:
+            batch = batch[0].to(device)  # Extract the batch of images and move to GPU
+            feat_map = feature_extractor(batch)  # Extract features
+            all_features.append(feat_map.cpu())
+            
+    return torch.cat(all_features, dim=0)
     
     
 def plot_confusion_matrix(test_labels, test_predict, unique_labels):

@@ -3,7 +3,6 @@ import torch
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import label_binarize
 
-
 def split_dataset(dataset, test_size=0.4, val_test_ratio=0.5):
     """
     Split the dataset into train, validation, and test sets.
@@ -50,9 +49,9 @@ def train_and_evaluate(train_histograms, train_labels, test_histograms, test_lab
     Train a Random Forest classifier and evaluate using precision-recall and ROC curves.
     """
     _, test_predict, y_score = ut.random_forest_classifier(train_histograms, train_labels, test_histograms, test_labels)
-
+    
     y_test_binarized = label_binarize(test_labels, classes=unique_labels)
-
+    
     ut.plot_precision_recall_curve(y_test_binarized, y_score, unique_labels)
     ut.plot_roc_curve(y_test_binarized, y_score, unique_labels)
     ut.plot_confusion_matrix(test_labels, test_predict, unique_labels)
